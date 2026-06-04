@@ -43,6 +43,10 @@ policy:
   killzones: [["09:30", "11:30"], ["14:00", "15:30"]]
 universe:
   inplay_max: 40
+  min_price: 5.0
+  min_adv_shares: 1000000
+  gap_pct: 0.01            # |open - prev_close| / prev_close
+  near_level_atr: 0.5      # within 0.5*atr5 of PDH/PDL counts as in-play
 backtest:
   benchmark: "SPY"        # default RS benchmark
   bars_per_rt_day: 78     # 6.5h * 12 five-minute bars (for rvol model)

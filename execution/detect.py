@@ -16,6 +16,7 @@ class SweepCandidate:
     reentry_ts: datetime
     wick_extreme: float
     reentry_close: float
+    reentry_volume: float
 
 
 def penetration_min(atr5: float, pen_atr_frac: float, min_pen_abs: float) -> float:
@@ -73,6 +74,7 @@ def _scan(bars: list[Bar], level_price: float, side: str, *, pen_min: float,
                 sweep_index=i, sweep_ts=bars[i].ts,
                 reentry_index=j, reentry_ts=bars[j].ts,
                 wick_extreme=wick, reentry_close=bars[j].c,
+                reentry_volume=bars[j].v,
             )
     return None
 

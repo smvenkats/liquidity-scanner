@@ -24,7 +24,7 @@ class BarStore:
                 self._cache[key] = []
             else:
                 rows = json.loads(path.read_text())
-                self._cache[key] = [Bar.from_questrade(r) for r in rows]
+                self._cache[key] = sorted((Bar.from_questrade(r) for r in rows), key=lambda b: b.ts)
         return self._cache[key]
 
     def sessions(self, symbol: str) -> list[date]:

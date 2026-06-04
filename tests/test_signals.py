@@ -9,7 +9,8 @@ def _candidate():
     ts_re = datetime.fromisoformat("2026-06-04T14:35:00-04:00")
     return SweepCandidate(direction="long", level_type="PDL", level_price=187.40,
                           sweep_index=0, sweep_ts=ts_sweep, reentry_index=1,
-                          reentry_ts=ts_re, wick_extreme=187.05, reentry_close=187.55)
+                          reentry_ts=ts_re, wick_extreme=187.05, reentry_close=187.55,
+                          reentry_volume=2_000_000)
 
 def test_make_signal_id_format():
     ts = datetime.fromisoformat("2026-06-04T14:35:00-04:00")
