@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Liquidity Sweep Scanner</title>
+<style>
+  :root{--bg:#0e1116;--panel:#161b22;--line:#2d333b;--txt:#c9d1d9;--muted:#8b949e;--long:#2ea043;--short:#f85149;--accent:#58a6ff}
+  *{box-sizing:border-box}
+  body{margin:0;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;background:var(--bg);color:var(--txt);height:100vh;display:grid;grid-template-columns:230px 1fr 360px}
+  .panel{background:var(--panel);overflow:auto;border-right:1px solid var(--line)}
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:14px 12px 6px}
+  .ctl{display:flex;justify-content:space-between;align-items:center;padding:5px 12px}
+  .ctl label{color:var(--muted)}
+  .ctl input,.ctl select{background:#0e1116;color:var(--txt);border:1px solid var(--line);border-radius:5px;padding:3px 6px;width:96px}
+  #status{padding:8px 12px;color:var(--muted);border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--panel)}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:6px 8px;text-align:right;white-space:nowrap}
+  th{position:sticky;top:0;background:#1b2129;color:var(--muted);border-bottom:1px solid var(--line)}
+  td:first-child,th:first-child,td:nth-child(2),th:nth-child(2){text-align:left}
+  tbody tr{border-bottom:1px solid var(--line);cursor:pointer}
+  tbody tr:hover{background:#1b2129}
+  tr.sel{background:#1f2630}
+  .long{color:var(--long)} .short{color:var(--short)}
+  .badge{font-size:10px;padding:1px 5px;border-radius:8px;background:var(--accent);color:#0e1116;margin-left:6px}
+  @keyframes flash{from{background:#1d3326}to{background:transparent}}
+  tr.new{animation:flash 6s ease-out}
+  #preview{padding:12px;border-right:none}
+  #pvhead{color:var(--muted);margin:6px 0 8px}
+  svg{width:100%;height:210px;background:#0e1116;border:1px solid var(--line);border-radius:6px}
+  .empty{color:var(--muted);padding:20px;text-align:center}
+</style>
+</head>
+<body>
+<div class="panel" id="filters">
+  <h2>Filters</h2>
+  <div class="ctl"><label>Min R:R</label><input id="f_rr" type="number" step="0.5" value="2"/></div>
+  <div class="ctl"><label>Min |RS| %</label><input id="f_rs" type="number" step="0.1" value="0"/></div>
+  <div class="ctl"><label>Direction</label><select id="f_dir"><option value="">both</option><option>long</option><option>short</option></select></div>
+  <div class="ctl"><label>Level</label><select id="f_lvl"><option value="">any</option><option>PDL</option><option>PDH</option></select></div>
+  <div class="ctl"><label>Killzone</label><select id="f_kz"><option value="">any</option><option>ny_open</option><option>power_hour</option><option>midday</option></select></div>
+  <div class="ctl"><label>Max age min</label><input id="f_age" type="number" step="5" value="0" title="0 = no limit"/></div>
+  <h2>Legend</h2>
+  <div class="ctl"><span class="long">&#9650; long</span><span class="short">&#9660; short</span></div>
+</div>
+<div class="panel" id="center">
+  <h2>Qualified signals (<span id="count">0</span>)</h2>
+  <table>
+    <thead><tr><th>time</th><th>ticker</th><th>dir</th><th>lvl</th><th>entry</th><th>stop</th><th>target</th><th>R:R</th><th>RS%</th><th>spr</th><th>rvol</th><th>kz</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div id="empty" class="empty">waiting for signals&#8230;</div>
+  <div id="status">connecting&#8230;</div>
+</div>
+<div class="panel" id="preview">
+  <h2>Preview</h2>
+  <div id="pvhead">select a signal</div>
+  <svg id="spark" viewBox="0 0 360 210" preserveAspectRatio="none"></svg>
+</div>
+<script>
+const S=[]; let selected=null;
+const $=id=>document.getElementById(id);
+const fnum=(x,d=2)=>(x==null||x===''?'':Number(x).toFixed(d));
+const tstr=iso=>{try{return new Date(iso).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}catch(e){return iso;}};
+function passes(s){
+  const rr=+$('f_rr').value||0, rs=+$('f_rs').value||0, dir=$('f_dir').value, lvl=$('f_lvl').value, kz=$('f_kz').value, age=+$('f_age').value||0;
+  if((s.rr||0)<rr) return false;
+  if(Math.abs((s.rs_score||0)*100)<rs) return false;
+  if(dir&&s.direction!==dir) return false;
+  if(lvl&&s.level_type!==lvl) return false;
+  if(kz&&s.killzone!==kz) return false;
+  if(age>0){const m=(Date.now()-new Date(s.reentry_time).getTime())/60000; if(m>age) return false;}
+  return true;
+}
+function render(){
+  const rows=$('rows'); rows.innerHTML='';
+  const vis=S.filter(passes);
+  $('count').textContent=vis.length;
+  $('empty').style.display=vis.length?'none':'block';
+  for(const s of vis){
+    const tr=document.createElement('tr');
+    tr.className=(s._new?'new ':'')+(selected===s.signal_id?'sel':'');
+    const dc=s.direction==='long'?'long':'short', arr=s.direction==='long'?'&#9650;':'&#9660;';
+    tr.innerHTML=`<td>${tstr(s.reentry_time)}${s._new?'<span class="badge">new</span>':''}</td>`+
+      `<td>${s.symbol}</td><td class="${dc}">${arr}</td><td>${s.level_type}</td>`+
+      `<td>${fnum(s.entry_price)}</td><td>${fnum(s.stop_price)}</td><td>${fnum(s.target_price)}</td>`+
+      `<td>${fnum(s.rr,1)}</td><td class="${(s.rs_score>=0)?'long':'short'}">${fnum((s.rs_score||0)*100,2)}</td>`+
+      `<td>${fnum(s.spread_bps,1)}</td><td>${fnum((s.volume_context||{}).rvol,1)}</td><td>${s.killzone||''}</td>`;
+    tr.onclick=()=>{selected=s.signal_id; render(); preview(s);};
+    rows.appendChild(tr);
+  }
+}
+async function preview(s){
+  $('pvhead').innerHTML=`<b>${s.symbol}</b> ${s.direction} ${s.level_type} &#183; R:R ${fnum(s.rr,1)} &#183; ${tstr(s.reentry_time)}`;
+  let bars=[];
+  try{const r=await fetch(`/bars?symbol=${encodeURIComponent(s.symbol)}&ts=${encodeURIComponent(s.reentry_time)}`); bars=(await r.json()).bars||[];}catch(e){}
+  drawSpark(s,bars);
+}
+function drawSpark(s,bars){
+  const svg=$('spark'),W=360,H=210,pad=10;
+  if(!bars.length){svg.innerHTML='<text x="12" y="24" fill="#8b949e">no bar data</text>';return;}
+  const cs=bars.map(b=>b.c), marks=[s.level_price,s.entry_price,s.stop_price,s.target_price,s.wick_extreme].filter(x=>x!=null);
+  const lo=Math.min(...cs,...marks), hi=Math.max(...cs,...marks), span=(hi-lo)||1;
+  const x=i=>pad+i*(W-2*pad)/Math.max(1,bars.length-1);
+  const y=v=>pad+(H-2*pad)*(1-(v-lo)/span);
+  const path=cs.map((c,i)=>`${i?'L':'M'}${x(i).toFixed(1)} ${y(c).toFixed(1)}`).join(' ');
+  const hl=(v,col,dash='')=>v==null?'':`<line x1="0" y1="${y(v).toFixed(1)}" x2="${W}" y2="${y(v).toFixed(1)}" stroke="${col}" stroke-width="1" stroke-dasharray="${dash}"/>`;
+  let wi=bars.findIndex(b=>b.l<=s.wick_extreme&&b.h>=s.wick_extreme); if(wi<0) wi=0;
+  svg.innerHTML=hl(s.level_price,'#8b949e','4 3')+hl(s.target_price,'#2ea043','2 2')+hl(s.stop_price,'#f85149','2 2')+hl(s.entry_price,'#58a6ff')+
+    `<path d="${path}" fill="none" stroke="#c9d1d9" stroke-width="1.5"/>`+
+    `<circle cx="${x(wi).toFixed(1)}" cy="${y(s.wick_extreme).toFixed(1)}" r="3.5" fill="#d29922"/>`;
+}
+function add(sig,isNew){if(!sig||S.some(x=>x.signal_id===sig.signal_id))return; sig._new=!!isNew; S.unshift(sig); if(isNew) setTimeout(()=>{sig._new=false; render();},6000);}
+function connect(){
+  const ws=new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen=()=>$('status').textContent='● live · connected';
+  ws.onclose=()=>{$('status').textContent='disconnected — retrying…'; setTimeout(connect,2000);};
+  ws.onmessage=ev=>{const m=JSON.parse(ev.data);
+    if(m.type==='backlog') m.signals.forEach(x=>add(x,false));
+    else if(m.type==='signal') add(m.signal,true);
+    render();
+  };
+}
+['f_rr','f_rs','f_dir','f_lvl','f_kz','f_age'].forEach(id=>$(id).addEventListener('input',render));
+connect(); render();
+</script>
+</body>
+</html>
