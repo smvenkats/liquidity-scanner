@@ -1,0 +1,16 @@
+# Secrets / credentials (never commit)
+.env
+credentials.json
+token.json
+
+# Intermediates / throwaway (regenerated)
+.tmp/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# OS cruft
+.DS_Store
+Thumbs.db

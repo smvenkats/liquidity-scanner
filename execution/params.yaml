@@ -1,0 +1,48 @@
+detection:
+  operating_tf: "5m"
+  tick_cadence: "1m"
+  levels: ["PDH", "PDL"]
+  level_session: "RTH"
+  atr_len: 14
+  pen_atr_frac: 0.10
+  min_pen_abs: 0.03        # USD (spec: min_pen_ticks)
+  max_reentry_bars: 1
+  confirm_vol: false
+  sustained_window_bars: 3
+  sustained_baseline_bars: 20
+  sustained_mult: 1.75
+  prox_atr_frac: 0.5
+rs:
+  rs_window_min: 20
+  rs_thresh: 0.003         # 0.30%
+  bench_flat_max: 0.002    # 0.20%
+  bench_default: "SPY"
+  rs_must_beat_both: false
+liquidity:
+  min_adv_shares: 1000000
+  min_bar_dollar_vol: 1000000
+  min_rvol: 1.0
+  max_spread_abs: 0.05
+  max_spread_pct: 0.0008   # 8 bps
+  min_book_shares: 2000
+  spread_risk_frac: 0.33
+rr:
+  entry_mode: "reentry_close"
+  buf_abs: 0.02            # USD (spec: buf_ticks)
+  buf_atr_frac: 0.05
+  target: "opposite_PD"
+  min_rr: 2.0
+trend:
+  htf_trend_gate: true     # ON for v1: longs need 1h up, shorts 1h down
+  htf_ema_len: 20          # EMA on COMPLETED 1h closes (lookahead-safe)
+  htf_require_slope: false
+policy:
+  rearm: "every_sweep"
+  cooldown_bars: 0
+  session_window: ["09:30", "16:00"]
+  killzones: [["09:30", "11:30"], ["14:00", "15:30"]]
+universe:
+  inplay_max: 40
+backtest:
+  benchmark: "SPY"        # default RS benchmark
+  bars_per_rt_day: 78     # 6.5h * 12 five-minute bars (for rvol model)
