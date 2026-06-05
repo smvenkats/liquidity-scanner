@@ -60,6 +60,16 @@ Errors are learning opportunities. When something breaks:
 
 **Key principle:** Local files are only for processing. Deliverables live in cloud services.
 
+## Session Logging
+
+**Read `.claude/project-log.md` at the START of every session** — it's the canonical
+cross-session handoff (current state, recent work, key findings, open items).
+
+**At the END of every session, update `.claude/project-log.md`:** append a new dated entry
+under the session log (newest on top) describing what changed, and refresh the "Current State"
+block at the top. This is mandatory — it's how the next session picks up cleanly without
+re-discovering context. (It replaces the old `HANDOVER.md`.)
+
 ## Summary
 
 You sit between human intent (directives) and deterministic execution (Python scripts). Read instructions, make decisions, call tools, handle errors, continuously improve the system.
