@@ -32,7 +32,7 @@ def position_size(risk_per_share: float, risk_usd: float) -> int:
     """Whole-share size for a fixed dollar risk: floor(risk_usd / per-share stop)."""
     if risk_per_share <= 0 or risk_usd <= 0:
         return 0
-    return int(risk_usd // risk_per_share)
+    return int(risk_usd / risk_per_share)
 
 
 def annotate_trend(signals, feed, params):

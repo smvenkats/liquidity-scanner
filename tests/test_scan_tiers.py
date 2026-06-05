@@ -80,7 +80,10 @@ def test_render_shows_both_tiers_and_a_sized_ticket():
         killzone = "midday"; entry_price = 214.66; stop_price = 214.41
         target_price = 222.82; rr = 31.98; rs_score = 0.0059; risk = 0.25; htf_bias = "up"
 
-    out = render([_FullSig()], [], session="2026-06-04", risk_usd=100)
+    out = render([_FullSig()], [], session="2026-06-04", risk_usd=100,
+                 max_notional=5000, max_qty=10000)
     assert "TIER A" in out and "aligned with 1h trend (1)" in out
-    assert "TIER B" in out and "(none)" in out          # empty reversal tier renders cleanly
-    assert "NVDA" in out and "size 400 sh" in out        # 100 / 0.25 = 400 shares
+    assert "TIER B" in out and "(none)" in out
+    assert "NVDA" in out
+    assert "BUY 400 sh" in out                  # long -> BUY, 100/0.25 = 400
+    assert "exceeds max $5,000" in out           # ~$85,864 notional trips the default cap

@@ -69,3 +69,6 @@ data:
 signals:
   risk_per_trade_usd: 100   # fixed $ risk per trade -> whole-share size = risk_usd / per-share stop
                             # (decision-support sizing; no orders are placed)
+execution:
+  per_order_max_notional_usd: 5000   # seeded from tv-mcp safety; independent of it
+  per_order_max_qty: 10000
