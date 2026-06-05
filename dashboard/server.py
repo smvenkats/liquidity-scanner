@@ -5,10 +5,13 @@ import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import threading
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import HTMLResponse, JSONResponse
 from execution.backtest.store import BarStore
 from dashboard.feed import load_signals, JsonlTailer, bars_window
+from dashboard.auth import require_auth, check_basic, auth_enabled
+from dashboard.scheduler import start_scheduler
 
 SIGNALS_PATH = Path(os.environ.get("SIGNALS_PATH", ".tmp/signals.jsonl"))
 BARS_DIR = os.environ.get("BARS_DIR", ".tmp/bt_data")
@@ -17,6 +20,10 @@ POLL_SECONDS = float(os.environ.get("DASH_POLL_SECONDS", "1.0"))
 
 
 def make_app() -> FastAPI:
+    # Fail closed in production: never serve an internet-facing dashboard without auth.
+    # RAILWAY_ENVIRONMENT is always injected by Railway; local/tests are unaffected.
+    if os.environ.get("RAILWAY_ENVIRONMENT") and not auth_enabled():
+        raise RuntimeError("Refusing to serve without auth: set DASH_USER and DASH_PASSWORD.")
     store = BarStore(BARS_DIR)
     clients: set = set()
 
@@ -24,6 +31,8 @@ def make_app() -> FastAPI:
     async def lifespan(app: FastAPI):
         tailer = JsonlTailer(SIGNALS_PATH)
         tailer.new_records()   # consume existing (already sent as backlog on connect)
+        stop = threading.Event()
+        start_scheduler(stop)  # periodic scan -> appends to SIGNALS_PATH (no-op if SCAN_ENABLED=false)
 
         async def loop():
             while True:
@@ -43,14 +52,15 @@ def make_app() -> FastAPI:
             yield
         finally:
             task.cancel()
+            stop.set()
 
-    app = FastAPI(lifespan=lifespan)
+    app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
-    @app.get("/")
+    @app.get("/", dependencies=[Depends(require_auth)])
     async def index():
         return HTMLResponse((STATIC / "index.html").read_text(encoding="utf-8"))
 
-    @app.get("/bars")
+    @app.get("/bars", dependencies=[Depends(require_auth)])
     async def bars(symbol: str, ts: str):
         w = bars_window(store, symbol, datetime.fromisoformat(ts))
         return JSONResponse({"symbol": symbol, "bars": [
@@ -59,6 +69,9 @@ def make_app() -> FastAPI:
 
     @app.websocket("/ws")
     async def ws(websocket: WebSocket):
+        if not check_basic(websocket.headers.get("authorization")):
+            await websocket.close(code=1008)  # policy violation — unauthorized
+            return
         await websocket.accept()
         clients.add(websocket)
         await websocket.send_json({"type": "backlog", "signals": load_signals(SIGNALS_PATH)})

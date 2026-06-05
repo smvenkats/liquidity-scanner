@@ -19,3 +19,9 @@ def test_loads_bars_and_lists_sessions(tmp_path):
 
 def test_missing_file_returns_empty(tmp_path):
     assert BarStore(tmp_path).bars("NOPE", "1h") == []
+
+def test_rejects_path_traversal_symbol(tmp_path):
+    store = BarStore(tmp_path)
+    assert store.bars("../../etc/passwd", "5m") == []
+    assert store.bars("..\\..\\x", "5m") == []
+    assert store.bars(".hidden", "5m") == []

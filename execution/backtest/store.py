@@ -17,6 +17,8 @@ class BarStore:
         self._cache: dict[tuple[str, str], list[Bar]] = {}
 
     def bars(self, symbol: str, tf: str) -> list[Bar]:
+        if "/" in symbol or "\\" in symbol or symbol.startswith("."):
+            return []   # reject path-traversal in the symbol (e.g. from the /bars endpoint)
         key = (symbol, tf)
         if key not in self._cache:
             path = self.root / f"{symbol}_{tf}.json"

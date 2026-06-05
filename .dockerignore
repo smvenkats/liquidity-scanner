@@ -1,0 +1,17 @@
+# Never bake secrets or local data into the image
+.env
+.questrade_token.json
+data/
+.tmp/
+
+# VCS / caches / venv / tooling
+.git/
+.gitignore
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+docs/
+tests/
+*.md
