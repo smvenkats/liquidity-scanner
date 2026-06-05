@@ -41,6 +41,8 @@
   <div class="ctl"><label>Max age min</label><input id="f_age" type="number" step="5" value="0" title="0 = no limit"/></div>
   <h2>Legend</h2>
   <div class="ctl"><span class="long">&#9650; long</span><span class="short">&#9660; short</span></div>
+  <h2>Test</h2>
+  <div style="padding:5px 12px"><button id="testbtn" style="width:100%;background:#21262d;color:var(--txt);border:1px solid var(--line);border-radius:5px;padding:6px;cursor:pointer">+ inject test signal</button></div>
 </div>
 <div class="panel" id="center">
   <h2>Qualified signals (<span id="count">0</span>)</h2>
@@ -122,6 +124,7 @@ function connect(){
   };
 }
 ['f_rr','f_rs','f_dir','f_lvl','f_kz','f_age'].forEach(id=>$(id).addEventListener('input',render));
+$('testbtn').onclick=async()=>{const b=$('testbtn');b.textContent='injecting…';try{await fetch('/test-signal',{method:'POST'});}catch(e){}setTimeout(()=>b.textContent='+ inject test signal',1200);};
 connect(); render();
 </script>
 </body>

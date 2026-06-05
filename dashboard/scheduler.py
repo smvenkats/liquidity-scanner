@@ -8,6 +8,10 @@ from __future__ import annotations
 import os
 import threading
 import traceback
+from datetime import datetime, time as dtime, timezone
+from zoneinfo import ZoneInfo
+
+_ET = ZoneInfo("America/New_York")
 
 
 def scan_enabled() -> bool:
@@ -16,11 +20,23 @@ def scan_enabled() -> bool:
     return os.environ.get("SCAN_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
 
 
+def is_market_hours(now_utc: datetime | None = None) -> bool:
+    """True on weekdays 09:30-16:00 ET (US regular trading hours)."""
+    now = (now_utc or datetime.now(timezone.utc)).astimezone(_ET)
+    return now.weekday() < 5 and dtime(9, 30) <= now.time() <= dtime(16, 0)
+
+
+def interval_seconds(now_utc: datetime | None = None) -> float:
+    """Scan cadence: SCAN_INTERVAL_MIN during market hours, SCAN_IDLE_MIN otherwise."""
+    rth = float(os.environ.get("SCAN_INTERVAL_MIN", "15"))
+    idle = float(os.environ.get("SCAN_IDLE_MIN", "60"))
+    return (rth if is_market_hours(now_utc) else idle) * 60.0
+
+
 def start_scheduler(stop: threading.Event):
     """Start the periodic-scan daemon thread if SCAN_ENABLED. Returns the thread or None."""
     if not scan_enabled():
         return None
-    interval = float(os.environ.get("SCAN_INTERVAL_MIN", "60")) * 60.0
     out_dir = os.environ.get("BARS_DIR", "/data/bars")
     signals_path = os.environ.get("SIGNALS_PATH", "/data/signals.jsonl")
 
@@ -37,7 +53,7 @@ def start_scheduler(stop: threading.Event):
                 print(f"[scheduler] scan emitted {n} fresh signals", flush=True)
             except Exception:
                 print("[scheduler] scan failed:\n" + traceback.format_exc(), flush=True)
-            stop.wait(interval)
+            stop.wait(interval_seconds())  # tighter during market hours, looser off-hours
 
     t = threading.Thread(target=loop, name="scan-scheduler", daemon=True)
     t.start()

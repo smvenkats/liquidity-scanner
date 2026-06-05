@@ -4,7 +4,8 @@ import os
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
-from datetime import datetime
+import json
+from datetime import datetime, timezone
 import threading
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -66,6 +67,15 @@ def make_app() -> FastAPI:
         return JSONResponse({"symbol": symbol, "bars": [
             {"ts": b.ts.isoformat(), "o": b.o, "h": b.h, "l": b.l, "c": b.c, "v": b.v}
             for b in w]})
+
+    @app.post("/test-signal", dependencies=[Depends(require_auth)])
+    async def test_signal():
+        from execution.scanner.emit_test_signal import make_test_signal
+        sig = make_test_signal(datetime.now(timezone.utc))
+        SIGNALS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with SIGNALS_PATH.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(sig) + "\n")
+        return JSONResponse({"ok": True, "signal_id": sig["signal_id"]})
 
     @app.websocket("/ws")
     async def ws(websocket: WebSocket):
