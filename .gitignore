@@ -14,3 +14,9 @@ __pycache__/
 # OS cruft
 .DS_Store
 Thumbs.db
+
+# Questrade auth token
+.questrade_token.json
+
+# Backfilled bar data
+data/bars/
