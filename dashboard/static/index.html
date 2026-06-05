@@ -111,7 +111,8 @@ function drawSpark(s,bars){
 }
 function add(sig,isNew){if(!sig||S.some(x=>x.signal_id===sig.signal_id))return; sig._new=!!isNew; S.unshift(sig); if(isNew) setTimeout(()=>{sig._new=false; render();},6000);}
 function connect(){
-  const ws=new WebSocket(`ws://${location.host}/ws`);
+  const proto=location.protocol==='https:'?'wss:':'ws:';
+  const ws=new WebSocket(`${proto}//${location.host}/ws`);
   ws.onopen=()=>$('status').textContent='● live · connected';
   ws.onclose=()=>{$('status').textContent='disconnected — retrying…'; setTimeout(connect,2000);};
   ws.onmessage=ev=>{const m=JSON.parse(ev.data);
