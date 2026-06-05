@@ -2,10 +2,12 @@
 builder = "dockerfile"
 
 [deploy]
-startCommand = "uvicorn dashboard.server:app --host 0.0.0.0 --port $PORT"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
+# Start command comes from the Dockerfile CMD, which runs through `sh -c` so ${PORT}
+# is expanded correctly (a startCommand here is NOT shell-expanded by Railway -> passes
+# the literal "$PORT" to uvicorn and crashes).
+#
 # A persistent Volume must be attached to this service and mounted at /data
 # (configured in the Railway UI/CLI — see directives/deploy_railway.md).
-# Signals, bars, and the rotated Questrade token cache live there.
