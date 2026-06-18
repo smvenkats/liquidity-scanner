@@ -47,3 +47,19 @@ def test_scan_once_skips_stale_feed_when_as_of_date_given():
     feed, P = _feed(), load_params()
     out = scan_once(["ABC"], feed, {}, P, benchmark="SPY", as_of_date=date(2026, 6, 5))
     assert out == []   # feed's latest session is 2026-06-04 -> skipped as stale
+
+def test_scan_once_ignores_premarket_sweeps():
+    feed, P = _feed(), load_params()
+    base = datetime(2026, 6, 4, 13, 0)  # 09:00 ET, before regular session
+    daily = [_b(datetime(2026, 6, 3), 100, 110.0, 99.0, 100, v=80_000_000),
+             _b(datetime(2026, 6, 4), 100, 111, 98, 110, v=80_000_000)]
+    warm = [_b(datetime(2026, 6, 3, 19, 0) + timedelta(minutes=5 * i),
+               99.30, 99.45, 99.15, 99.30) for i in range(20)]
+    premarket = [_b(base, 99.20, 99.40, 98.50, 99.70, v=2_000_000)]
+    sym5 = warm + premarket
+    bench5 = [_b(b.ts, 500, 500, 500, 500, v=1) for b in sym5]
+    h1 = [_b(datetime(2026, 6, 3, 13, 30) + timedelta(hours=i), 90 + i, 90 + i, 90 + i, 90 + i)
+          for i in range(25)]
+    f = Feed({("ABC", "5m"): sym5, ("ABC", "1d"): daily, ("ABC", "1h"): h1, ("SPY", "5m"): bench5})
+
+    assert scan_once(["ABC"], f, {}, P, benchmark="SPY") == []

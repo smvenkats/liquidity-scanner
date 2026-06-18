@@ -13,8 +13,10 @@ from execution.backtest.store import BarStore
 from dashboard.feed import load_signals, JsonlTailer, bars_window
 from dashboard.auth import require_auth, check_basic, auth_enabled
 from dashboard.scheduler import start_scheduler
+from execution.scanner.run_scan import load_scan_status
 
 SIGNALS_PATH = Path(os.environ.get("SIGNALS_PATH", ".tmp/signals.jsonl"))
+SCAN_STATUS_PATH = Path(os.environ.get("SCAN_STATUS_PATH", ".tmp/scan_status.json"))
 BARS_DIR = os.environ.get("BARS_DIR", ".tmp/bt_data")
 STATIC = Path(__file__).parent / "static"
 POLL_SECONDS = float(os.environ.get("DASH_POLL_SECONDS", "1.0"))
@@ -67,6 +69,10 @@ def make_app() -> FastAPI:
         return JSONResponse({"symbol": symbol, "bars": [
             {"ts": b.ts.isoformat(), "o": b.o, "h": b.h, "l": b.l, "c": b.c, "v": b.v}
             for b in w]})
+
+    @app.get("/scan-status", dependencies=[Depends(require_auth)])
+    async def scan_status():
+        return JSONResponse(load_scan_status(SCAN_STATUS_PATH))
 
     @app.post("/test-signal", dependencies=[Depends(require_auth)])
     async def test_signal():

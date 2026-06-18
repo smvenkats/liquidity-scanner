@@ -1,8 +1,10 @@
 from __future__ import annotations
-from datetime import time, timedelta
+from datetime import time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from execution.models import Bar
 
 BARS_PER_RTH = 78   # 6.5h * 12 five-minute bars
+_ET = ZoneInfo("America/New_York")
 
 
 def adv_from_daily(daily_bars: list[Bar], lookback: int = 20) -> float:
@@ -21,8 +23,28 @@ def rvol_from_adv(bar_volume: float, adv_shares: float) -> float:
     return bar_volume / avg_5m if avg_5m > 0 else 0.0
 
 
+def market_dt(ts):
+    """Timestamp converted to America/New_York. Naive timestamps are treated as UTC."""
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return ts.astimezone(_ET)
+
+
+def market_date(ts):
+    return market_dt(ts).date()
+
+
+def is_rth(ts) -> bool:
+    t = market_dt(ts).time()
+    return time(9, 30) <= t <= time(16, 0)
+
+
 def killzone(ts) -> str:
-    t = (ts - timedelta(hours=4)).time()   # UTC -> US/Eastern (EDT)
+    t = market_dt(ts).time()
+    if t < time(9, 30):
+        return "pre_rth"
+    if t > time(16, 0):
+        return "post_rth"
     if time(9, 30) <= t < time(11, 30):
         return "ny_open"
     if time(14, 0) <= t < time(15, 30):

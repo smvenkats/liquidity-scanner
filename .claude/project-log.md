@@ -9,11 +9,13 @@ At the END of every session, append a dated entry: what changed, current state, 
 
 ## Current State (2026-06-18)
 
-- **`main`**, tests were last known **147 passed / 1 skipped** (the skip = token-gated live smoke; skips when the
+- **`main`**, tests were last known **153 passed / 1 skipped** (the skip = token-gated live smoke; skips when the
   local Questrade token is rotated/expired — see token conflict below).
 - **Live:** private family dashboard on **Railway** (`liquidity-scanner-production.up.railway.app`),
-  behind Basic Auth, with an in-process **market-hours-aware** scan. Verified end-to-end: auth,
-  scan, WebSocket stream, and Questrade fetch from Railway's IP (no Cloudflare block).
+  behind Basic Auth, with an in-process **market-hours-aware** scan. Verified after the Questrade
+  cache fix that Railway can emit real signals (`scan_once_raw=8`, `fresh=4`). Latest local patch
+  makes dashboard times render in ET, filters scanner detections to RTH bars, and exposes scan
+  health (`last scan`, `raw candidates`, `emitted`, `benchmark latest 5m`, `failed backfills`).
 - **Pipeline:** data layer (Questrade + yfinance) → tiered sweep detection → daily feed (CLI
   `daily.py`) + hosted dashboard → order tickets (`build_ticket`). **Decision-support only — no
   live order execution is built.**
@@ -37,6 +39,37 @@ At the END of every session, append a dated entry: what changed, current state, 
 - `execution/backtest/` — BarStore + backtest harness
 - `dashboard/` — FastAPI server (auth, /ws, /bars, /test-signal), scheduler, static SPA
 - `directives/` — SOPs (backfill, daily_signals, deploy_railway, run_*)
+
+---
+
+## Session — 2026-06-18 (RTH timing + dashboard scan health)
+
+- After the Questrade token-cache parent fix deployed, Railway emitted real signals:
+  `backfill_done ok_partial_skipped=33/33 failed={}`, `benchmark=SPY bench5_rows=8283`,
+  `scan_once_raw=8`, `after_setup_dedupe=4 fresh=4`.
+- User noticed dashboard times looked like premarket (for example 07:25 AM). Root distinction:
+  the browser was rendering signal timestamps in local machine time, while the trading session
+  logic must be judged in New York time. Also, backend `killzone()` was double-shifting timezone-aware
+  exchange timestamps by subtracting four hours manually.
+- Fixed the scanner timing path:
+  - `killzone()` now converts timestamps through `America/New_York`, treating naive timestamps as UTC.
+  - Added `market_date()` and `is_rth()` helpers.
+  - `scan_once()` and `SymbolScanner.on_update()` now select the current market date via ET and only
+    scan regular-session 5m bars, preventing premarket wick sweeps from qualifying.
+- Added persistent scan-health plumbing:
+  - `run_scan(..., status_path=...)` writes `last_scan_at`, `raw_candidates`, `after_setup_dedupe`,
+    `emitted`, `benchmark_latest_5m`, `benchmark_5m_rows`, `failed_backfills`, and `abort`.
+  - Scheduler writes `/data/scan_status.json` by default.
+  - FastAPI serves `GET /scan-status`.
+  - Dashboard sidebar shows last scan, raw candidates, emitted count, benchmark latest 5m, and failed
+    backfills, while table/preview times now render explicitly as ET.
+- Verification:
+  - Focused regressions: ET killzone/RTH helper, premarket sweep exclusion, status roundtrip,
+    dashboard `/scan-status`, and no-benchmark abort status.
+  - `python -m pytest -q` -> **153 passed / 1 skipped / 1 expected yfinance warning**.
+  - Inline dashboard JavaScript syntax check -> `inline js syntax ok`.
+- Next watch item after Railway redeploy: confirm the sidebar scan health shows fresh `last scan`,
+  `benchmark latest 5m` in ET, `failed backfills: none`, and nonzero `raw candidates` when setups exist.
 
 ---
 

@@ -38,6 +38,22 @@ def test_index_and_bars_and_backlog(tmp_path, monkeypatch):
         msg = ws.receive_json()
         assert msg["type"] == "backlog" and msg["signals"][0]["symbol"] == "X"
 
+def test_scan_status_endpoint(tmp_path, monkeypatch):
+    static = _seed_static(tmp_path)
+    bars_dir = tmp_path / "data"; bars_dir.mkdir()
+    status = tmp_path / "scan_status.json"
+    status.write_text(json.dumps({"raw_candidates": 8, "emitted": 4}))
+
+    monkeypatch.setattr(server, "STATIC", static)
+    monkeypatch.setattr(server, "BARS_DIR", str(bars_dir))
+    monkeypatch.setattr(server, "SCAN_STATUS_PATH", status)
+    app = server.make_app()
+    client = TestClient(app)
+
+    body = client.get("/scan-status").json()
+    assert body["raw_candidates"] == 8
+    assert body["emitted"] == 4
+
 def test_ws_streams_new_signal(tmp_path, monkeypatch):
     static = _seed_static(tmp_path)
     bars_dir = tmp_path / "data"; bars_dir.mkdir()

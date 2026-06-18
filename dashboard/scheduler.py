@@ -39,6 +39,7 @@ def start_scheduler(stop: threading.Event):
         return None
     out_dir = os.environ.get("BARS_DIR", "/data/bars")
     signals_path = os.environ.get("SIGNALS_PATH", "/data/signals.jsonl")
+    status_path = os.environ.get("SCAN_STATUS_PATH", "/data/scan_status.json")
 
     def loop():
         from execution.config import load_params
@@ -49,7 +50,8 @@ def start_scheduler(stop: threading.Event):
             try:
                 params = load_params()
                 n = run_scan(params, out_dir=out_dir, signals_path=signals_path,
-                             benchmark=params["data"]["benchmark"])
+                             benchmark=params["data"]["benchmark"],
+                             status_path=status_path)
                 print(f"[scheduler] scan emitted {n} fresh signals", flush=True)
             except Exception:
                 print("[scheduler] scan failed:\n" + traceback.format_exc(), flush=True)

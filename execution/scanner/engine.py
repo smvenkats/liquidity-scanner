@@ -5,7 +5,7 @@ from execution.indicators import atr
 from execution.detect import penetration_min, detect_bullish_sweep, detect_bearish_sweep
 from execution.config import load_params
 from execution.pipeline import ScanContext, qualify_candidate
-from execution.backtest.features import adv_from_daily
+from execution.backtest.features import adv_from_daily, is_rth, market_date
 from execution.backtest.replay import find_all_sweeps
 
 
@@ -28,8 +28,8 @@ class SymbolScanner:
     def on_update(self, ctx: ScanContext) -> list:
         d = ctx.params["detection"]
         pen = penetration_min(ctx.atr5, d["pen_atr_frac"], d["min_pen_abs"])
-        today = max(b.ts.date() for b in ctx.bars5)
-        sess = [b for b in ctx.bars5 if b.ts.date() == today]
+        today = max(market_date(b.ts) for b in ctx.bars5)
+        sess = [b for b in ctx.bars5 if market_date(b.ts) == today and is_rth(b.ts)]
         out = []
         for fn, level in [(detect_bullish_sweep, ctx.levels.pdl),
                           (detect_bearish_sweep, ctx.levels.pdh)]:
@@ -54,14 +54,14 @@ def scan_once(symbols, feed, states, params=None, *, benchmark="SPY",
         bench5 = feed.bars(benchmark, "5m")
         if not bars5 or not daily:
             continue
-        today = max(b.ts.date() for b in bars5)
+        today = max(market_date(b.ts) for b in bars5)
         if as_of_date is not None and today != as_of_date:
             continue
         try:
             lvl = previous_session_levels(daily, today)
         except ValueError:
             continue
-        pre = [b for b in bars5 if b.ts.date() < today]
+        pre = [b for b in bars5 if market_date(b.ts) < today]
         if len(pre) < d["atr_len"] + 1:
             continue
         ctx = ScanContext(symbol=sym, bars5=bars5, bench5=bench5, h1=h1,

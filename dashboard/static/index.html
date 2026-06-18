@@ -22,6 +22,9 @@
   tr.sel{background:#1f2630}
   .long{color:var(--long)} .short{color:var(--short)}
   .badge{font-size:10px;padding:1px 5px;border-radius:8px;background:var(--accent);color:#0e1116;margin-left:6px}
+  .health{padding:8px 12px;color:var(--muted);border-top:1px solid var(--line)}
+  .health div{display:flex;justify-content:space-between;gap:10px;padding:2px 0}
+  .health b{color:var(--txt);font-weight:600}
   @keyframes flash{from{background:#1d3326}to{background:transparent}}
   tr.new{animation:flash 6s ease-out}
   #preview{padding:12px;border-right:none}
@@ -43,6 +46,8 @@
   <div class="ctl"><span class="long">&#9650; long</span><span class="short">&#9660; short</span></div>
   <h2>Test</h2>
   <div style="padding:5px 12px"><button id="testbtn" style="width:100%;background:#21262d;color:var(--txt);border:1px solid var(--line);border-radius:5px;padding:6px;cursor:pointer">+ inject test signal</button></div>
+  <h2>Scan</h2>
+  <div id="health" class="health">waiting for scan status...</div>
 </div>
 <div class="panel" id="center">
   <h2>Qualified signals (<span id="count">0</span>)</h2>
@@ -62,7 +67,8 @@
 const S=[]; let selected=null;
 const $=id=>document.getElementById(id);
 const fnum=(x,d=2)=>(x==null||x===''?'':Number(x).toFixed(d));
-const tstr=iso=>{try{return new Date(iso).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}catch(e){return iso;}};
+const tstr=iso=>{try{return new Date(iso).toLocaleTimeString('en-US',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit'})+' ET';}catch(e){return iso;}};
+const ageStr=iso=>{try{const m=(Date.now()-new Date(iso).getTime())/60000; if(m<90)return `${Math.max(0,Math.round(m))}m ago`; return `${Math.round(m/60)}h ago`;}catch(e){return '';}};
 function passes(s){
   const rr=+$('f_rr').value||0, rs=+$('f_rs').value||0, dir=$('f_dir').value, lvl=$('f_lvl').value, kz=$('f_kz').value, age=+$('f_age').value||0;
   if((s.rr||0)<rr) return false;
@@ -97,6 +103,20 @@ async function preview(s){
   try{const r=await fetch(`/bars?symbol=${encodeURIComponent(s.symbol)}&ts=${encodeURIComponent(s.reentry_time)}`); bars=(await r.json()).bars||[];}catch(e){}
   drawSpark(s,bars);
 }
+async function refreshHealth(){
+  const el=$('health');
+  try{
+    const h=await fetch('/scan-status').then(r=>r.json());
+    if(!h||!Object.keys(h).length){el.textContent='no scan status yet';return;}
+    const failed=h.failed_backfills||{}, failedKeys=Object.keys(failed);
+    el.innerHTML=
+      `<div><span>last scan</span><b>${h.last_scan_at?ageStr(h.last_scan_at):'n/a'}</b></div>`+
+      `<div><span>raw candidates</span><b>${h.raw_candidates??0}</b></div>`+
+      `<div><span>emitted</span><b>${h.emitted??0}</b></div>`+
+      `<div><span>benchmark latest 5m</span><b>${h.benchmark_latest_5m?tstr(h.benchmark_latest_5m):'n/a'}</b></div>`+
+      `<div><span>failed backfills</span><b>${failedKeys.length?failedKeys.join(', '):'none'}</b></div>`;
+  }catch(e){el.textContent='scan status unavailable';}
+}
 function drawSpark(s,bars){
   const svg=$('spark'),W=360,H=210,pad=10;
   if(!bars.length){svg.innerHTML='<text x="12" y="24" fill="#8b949e">no bar data</text>';return;}
@@ -125,6 +145,7 @@ function connect(){
 }
 ['f_rr','f_rs','f_dir','f_lvl','f_kz','f_age'].forEach(id=>$(id).addEventListener('input',render));
 $('testbtn').onclick=async()=>{const b=$('testbtn');b.textContent='injecting…';try{await fetch('/test-signal',{method:'POST'});}catch(e){}setTimeout(()=>b.textContent='+ inject test signal',1200);};
+refreshHealth(); setInterval(refreshHealth,15000);
 connect(); render();
 </script>
 </body>

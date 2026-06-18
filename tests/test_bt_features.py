@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from execution.models import Bar
 from execution.backtest.features import (
-    adv_from_daily, modeled_spread, rvol_from_adv, killzone, close_now_prev)
+    adv_from_daily, modeled_spread, rvol_from_adv, killzone, close_now_prev,
+    is_rth, market_date)
 
 def _b(ts, c, v=100):
     return Bar(ts=ts, o=c, h=c, l=c, c=c, v=v)
@@ -27,6 +29,14 @@ def test_killzone_buckets_by_eastern_time():
     assert killzone(open_utc) == "ny_open"
     assert killzone(power_utc) == "power_hour"
     assert killzone(mid_utc) == "midday"
+
+def test_killzone_respects_timezone_aware_exchange_time():
+    et = ZoneInfo("America/New_York")
+    assert killzone(datetime(2026, 6, 18, 9, 50, tzinfo=et)) == "ny_open"
+    assert killzone(datetime(2026, 6, 18, 9, 25, tzinfo=et)) == "pre_rth"
+    assert is_rth(datetime(2026, 6, 18, 9, 30, tzinfo=et))
+    assert not is_rth(datetime(2026, 6, 18, 9, 25, tzinfo=et))
+    assert market_date(datetime(2026, 6, 18, 23, 0, tzinfo=et)).isoformat() == "2026-06-18"
 
 def test_close_now_prev_returns_now_and_lagged_close():
     base = datetime(2026, 6, 4, 14, 0)
