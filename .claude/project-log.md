@@ -83,6 +83,10 @@ At the END of every session, append a dated entry: what changed, current state, 
   help. Added a narrow fallback: when cached-token exchange returns HTTP 400 and a different
   env token exists, try the env token once, persist the new rotation, and log the recovery. Verification:
   `python -m pytest -q` -> **155 passed / 1 skipped / 1 expected yfinance warning**.
+- If Railway still shows HTTP 400 without the recovery log, the auth error now includes a
+  secret-safe token-state hint (`cached`, `env`, `cached_env_same`, `env_fallback`) so the next log
+  can distinguish missing env token vs same stale token vs env fallback attempted and failed.
+  Verification: `python -m pytest -q` -> **156 passed / 1 skipped / 1 expected yfinance warning**.
 
 ---
 

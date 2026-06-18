@@ -60,6 +60,25 @@ def test_bad_cached_refresh_token_falls_back_to_new_env_token(tmp_path, monkeypa
     assert client._current_refresh_token() == "ROTATED_FROM_ENV"
 
 
+def test_auth_error_includes_secret_safe_token_state(tmp_path, monkeypatch):
+    cache = tmp_path / "tok.json"
+    cache.write_text(json.dumps({"refresh_token": "BAD_CACHED", "access_token": "A",
+                                 "api_server": "https://old", "expires_at": 0.0}))
+
+    def fail_request(url, headers=None, form=None):
+        raise qc.QuestradeAPIError("HTTP 400 for token", status=400)
+
+    monkeypatch.setattr(qc, "_http_request_json", fail_request)
+    client = qc.QuestradeClient(refresh_token="BAD_CACHED", token_cache_path=cache)
+
+    with pytest.raises(qc.QuestradeAuthError) as err:
+        client._refresh_access_token()
+
+    msg = str(err.value)
+    assert "token_state=cached=yes,env=yes,cached_env_same=yes,env_fallback=not_available" in msg
+    assert "BAD_CACHED" not in msg
+
+
 def test_get_candles_parses_list(monkeypatch):
     client = qc.QuestradeClient(refresh_token="x", token_cache_path="/nonexistent.json")
     monkeypatch.setattr(client, "_authorized_get",

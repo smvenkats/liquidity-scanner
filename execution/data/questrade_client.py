@@ -286,6 +286,16 @@ class QuestradeClient:
         return _http_request_json(TOKEN_URL, form={
             "grant_type": "refresh_token", "refresh_token": refresh_token})
 
+    def _auth_state_hint(self, *, env_fallback: str) -> str:
+        cached = getattr(self, "_cached_refresh_token", None)
+        env = self._env_refresh_token
+        same = bool(cached and env and cached == env)
+        return ("token_state="
+                f"cached={'yes' if cached else 'no'},"
+                f"env={'yes' if env else 'no'},"
+                f"cached_env_same={'yes' if same else 'no'},"
+                f"env_fallback={env_fallback}")
+
     def _refresh_access_token(self) -> None:
         """Exchange the refresh token for an access token; persist the rotation."""
         rt = self._current_refresh_token()
@@ -302,7 +312,8 @@ class QuestradeClient:
                         raise QuestradeAuthError(
                             f"Token exchange failed ({env_e}). The refresh token is invalid, already "
                             "used, or expired — Questrade tokens are single-use. Regenerate one in "
-                            "the API centre and update QUESTRADE_REFRESH_TOKEN.") from env_e
+                            "the API centre and update QUESTRADE_REFRESH_TOKEN. "
+                            f"{self._auth_state_hint(env_fallback='attempted_failed')}.") from env_e
                     else:
                         print("[questrade] cached refresh token was rejected; recovered with "
                               "QUESTRADE_REFRESH_TOKEN and updated token cache", flush=True)
@@ -314,7 +325,8 @@ class QuestradeClient:
                 raise QuestradeAuthError(
                     f"Token exchange failed ({e}). The refresh token is invalid, already "
                     "used, or expired — Questrade tokens are single-use. Regenerate one in "
-                    "the API centre and update QUESTRADE_REFRESH_TOKEN.") from e
+                    "the API centre and update QUESTRADE_REFRESH_TOKEN. "
+                    f"{self._auth_state_hint(env_fallback='not_available')}.") from e
             if e.status == 403 and "1010" in str(e):
                 raise QuestradeAuthError(
                     f"Token exchange blocked by Cloudflare (error 1010), not a token problem "
