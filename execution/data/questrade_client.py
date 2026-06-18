@@ -268,6 +268,7 @@ class QuestradeClient:
             "expires_at": self._expires_at,
             "refresh_token": refresh_token,
         }
+        self._cache_path.parent.mkdir(parents=True, exist_ok=True)
         self._cache_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         self._cached_refresh_token = refresh_token
 

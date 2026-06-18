@@ -66,10 +66,16 @@ At the END of every session, append a dated entry: what changed, current state, 
   instead of collapsing to plain `failed`, and each scheduled scan logs backfill summary, benchmark
   5m row count/latest timestamp, raw signal count, setup-dedupe count, fresh count, and existing
   signal-id count. Verified locally with `python -m pytest -q` -> **147 passed / 1 skipped**.
+- Follow-up Railway logs narrowed the issue to `SPY_5m` failing with
+  `FileNotFoundError: /data/.questrade_token_v3.json`. Root cause: `QuestradeClient._save_cache()`
+  tried to persist the rotated single-use token before ensuring the token-cache parent directory
+  existed. Because SPY is first in the backfill order, SPY failed, but the in-memory access token
+  let later symbols succeed. Fixed by creating the parent directory in `_save_cache()`, with a
+  regression test. Verified locally with `python -m pytest -q` -> **148 passed / 1 skipped**.
 - Next recommended diagnostic action: after Railway redeploys this logging patch, inspect one scheduler
-  cycle for `[backfill] *_5m source=questrade ...` and `[scan] ...` lines. Those should reveal whether
-  5m died from auth, Cloudflare/transport, entitlement, symbol lookup, empty recent windows, or whether
-  candidates are later removed by dedupe/freshness.
+  cycle for `SPY_5m: ok|partial`, `[scan] benchmark=SPY bench5_rows=...`, and
+  `[scan] scan_once_raw=...`. If SPY 5m succeeds but no fresh signals emit, continue down the chain
+  with raw-candidate/filter/dedupe counts.
 
 ---
 

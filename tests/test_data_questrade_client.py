@@ -18,6 +18,20 @@ def test_cached_refresh_token_supersedes_env(tmp_path):
     assert client._current_refresh_token() == "ROTATED"
 
 
+def test_save_cache_creates_parent_directory(tmp_path):
+    cache = tmp_path / "data" / ".questrade_token.json"
+    client = qc.QuestradeClient(refresh_token="ENV_SEED", token_cache_path=cache)
+    client._access_token = "A"
+    client._api_server = "https://s"
+    client._expires_at = 123.0
+
+    client._save_cache("ROTATED")
+
+    data = json.loads(cache.read_text())
+    assert data["refresh_token"] == "ROTATED"
+    assert client._current_refresh_token() == "ROTATED"
+
+
 def test_get_candles_parses_list(monkeypatch):
     client = qc.QuestradeClient(refresh_token="x", token_cache_path="/nonexistent.json")
     monkeypatch.setattr(client, "_authorized_get",
