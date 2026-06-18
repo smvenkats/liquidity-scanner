@@ -42,18 +42,30 @@ def run_scan(params, *, out_dir, signals_path, benchmark="SPY", do_backfill=True
         d = params["data"]
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=int(d["lookback_years"] * 365))
-        backfill([d["benchmark"], *d["universe"]], d["timeframes"], start, end, params, out_dir=out_dir)
+        print(f"[scan] backfill_start out_dir={out_dir} symbols={len([d['benchmark'], *d['universe']])} "
+              f"tfs={d['timeframes']} start={start.date()} end={end.date()}", flush=True)
+        summary = backfill([d["benchmark"], *d["universe"]], d["timeframes"], start, end, params, out_dir=out_dir)
+        failed = {k: v for k, v in summary.items() if v not in ("ok", "partial", "skipped")}
+        print(f"[scan] backfill_done ok_partial_skipped={len(summary) - len(failed)}/{len(summary)} "
+              f"failed={failed}", flush=True)
 
     store = BarStore(out_dir)
     bench5 = store.bars(benchmark, "5m")
+    print(f"[scan] benchmark={benchmark} bench5_rows={len(bench5)}", flush=True)
     if not bench5:
+        print("[scan] abort=no_benchmark_5m", flush=True)
         return 0
+    print(f"[scan] benchmark_latest_5m={bench5[-1].ts.isoformat()}", flush=True)
     as_of = max(b.ts.date() for b in bench5)
     sigs = scan_once(params["data"]["universe"], store, {}, params=params,
                      benchmark=benchmark, trend_gate=False, mode="live", as_of_date=as_of)
+    print(f"[scan] scan_once_raw={len(sigs)} as_of={as_of}", flush=True)
     sigs = dedupe_setups(sigs)              # one per (symbol, level, direction) — match the CLI feed
+    after_dedupe = len(sigs)
     annotate_trend(sigs, store, params)
     fresh = filter_fresh(sigs, signals_path)
+    print(f"[scan] after_setup_dedupe={after_dedupe} fresh={len(fresh)} "
+          f"existing_signal_ids={len(existing_signal_ids(signals_path))}", flush=True)
     emit_signals(fresh, signals_path)
     return len(fresh)
 

@@ -7,9 +7,9 @@ At the END of every session, append a dated entry: what changed, current state, 
 
 ---
 
-## Current State (2026-06-04)
+## Current State (2026-06-18)
 
-- **`main`**, tests **147 passed / 1 skipped** (the skip = token-gated live smoke; skips when the
+- **`main`**, tests were last known **147 passed / 1 skipped** (the skip = token-gated live smoke; skips when the
   local Questrade token is rotated/expired — see token conflict below).
 - **Live:** private family dashboard on **Railway** (`liquidity-scanner-production.up.railway.app`),
   behind Basic Auth, with an in-process **market-hours-aware** scan. Verified end-to-end: auth,
@@ -17,6 +17,12 @@ At the END of every session, append a dated entry: what changed, current state, 
 - **Pipeline:** data layer (Questrade + yfinance) → tiered sweep detection → daily feed (CLI
   `daily.py`) + hosted dashboard → order tickets (`build_ticket`). **Decision-support only — no
   live order execution is built.**
+- **Diagnostic note:** a temporary local script `.tmp/debug_drop_audit.py` now explains where
+  candidates drop between cached bars and emitted signals. On the stale local `data/bars` snapshot
+  (`as_of=2026-06-04`) it found **23 raw sweeps** and **3 core-passing gate-off setups**, with
+  main candidate-level failures from RS (69.6%) and rvol/liquidity (52.2%). This proves the local
+  detector can produce real candidates; production zero-results likely need Railway runtime
+  inspection: data freshness/backfill, precondition skips, setup/file dedupe, or hosted env state.
 
 ### Run commands
 - Tests: `python -m pytest -q`  (set `$env:PYTHONPATH="."` for ad-hoc scripts)
@@ -31,6 +37,39 @@ At the END of every session, append a dated entry: what changed, current state, 
 - `execution/backtest/` — BarStore + backtest harness
 - `dashboard/` — FastAPI server (auth, /ws, /bars, /test-signal), scheduler, static SPA
 - `directives/` — SOPs (backfill, daily_signals, deploy_railway, run_*)
+
+---
+
+## Session — 2026-06-18 (zero-real-signal diagnostic strategy)
+
+- User reported Railway dashboard stays `live • connected` and mock injections work, but no real
+  market signals have appeared for weeks. Reviewed the actual repo path instead of giving generic
+  advice: `execution/scanner/run_scan.py`, `execution/scanner/tiers.py`, `execution/scanner/engine.py`,
+  `execution/pipeline.py`, `dashboard/server.py`, `dashboard/scheduler.py`, and params.
+- Key architecture reminder: hosted `run_scan` intentionally scans **gate-off core-passing**
+  candidates (RS + liquidity + R:R) and annotates 1h trend afterward; frontend filters only hide/show
+  already-emitted `signals.jsonl` rows. Killzone and max-age controls are frontend display filters,
+  not backend gates. Current detection levels are **PDH/PDL only**; PWH/PWL are not currently wired.
+- Added temporary local diagnostic script `.tmp/debug_drop_audit.py` (ignored by git) to report:
+  pre-scan symbol drops, raw sweep count, RS/RR/liquidity subcheck failures, trend-if-gate-on,
+  killzone distribution, setup dedupe, and existing `signals.jsonl` suppressions.
+- Local run: `PYTHONPATH=. python .tmp/debug_drop_audit.py --bars-dir data/bars --signals-path .tmp/signals.jsonl --json-out .tmp/drop_audit.json`.
+  Result on stale local cache: 10/10 symbols active, 23 raw sweeps, 3 core-passing gate-off setups,
+  0 existing-signal suppressions, 16 one-per-setup dedupe suppressions; failures mainly RS/rvol.
+- User-provided Railway logs showed the sharper production root symptom: **every important `*_5m`
+  fetch failed**, including `SPY_5m`, `QQQ_5m`, AAPL/NVDA/TSLA/AMD/META/AMZN/MSFT/GOOGL/NFLX.
+  Meanwhile `*_1h` was ok via yfinance and `*_1d` was skipped from existing cache. Since the scanner
+  detects sweeps on 5m and anchors `as_of` from `SPY_5m`, this is upstream of frontend filters and
+  explains repeated `[scheduler] scan emitted 0 fresh signals`.
+- Added production diagnostic logging in `execution/data/backfill.py` and
+  `execution/scanner/run_scan.py`: source-level backfill failures now print the exception type/message
+  instead of collapsing to plain `failed`, and each scheduled scan logs backfill summary, benchmark
+  5m row count/latest timestamp, raw signal count, setup-dedupe count, fresh count, and existing
+  signal-id count. Verified locally with `python -m pytest -q` -> **147 passed / 1 skipped**.
+- Next recommended diagnostic action: after Railway redeploys this logging patch, inspect one scheduler
+  cycle for `[backfill] *_5m source=questrade ...` and `[scan] ...` lines. Those should reveal whether
+  5m died from auth, Cloudflare/transport, entitlement, symbol lookup, empty recent windows, or whether
+  candidates are later removed by dedupe/freshness.
 
 ---
 

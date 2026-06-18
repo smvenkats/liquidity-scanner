@@ -160,17 +160,25 @@ def backfill_one(client, symbol: str, tf: str, start: datetime, end: datetime,
         start = max(start, end - timedelta(days=horizon))
 
     sources = _SOURCES.get(tf, ("questrade",))
+    source_errors: list[dict] = []
     for source in sources:
         try:
             rows, gaps = _fetch_from_source(source, client, symbol, tf, start, end, params)
-        except SeriesUnavailable:
+        except SeriesUnavailable as e:
+            source_errors.append({"source": source, "type": "SeriesUnavailable", "error": str(e)})
+            print(f"[backfill] {symbol}_{tf} source={source} unavailable: {e}", flush=True)
             continue
-        except Exception:  # noqa: BLE001 — a dead source shouldn't kill the series; try the next
+        except Exception as e:  # noqa: BLE001 — a dead source shouldn't kill the series; try the next
+            source_errors.append({"source": source, "type": type(e).__name__, "error": str(e)})
+            print(f"[backfill] {symbol}_{tf} source={source} failed: {type(e).__name__}: {e}", flush=True)
             continue
         if rows:
             status = "partial" if gaps else "ok"
             write_series(out_dir, symbol, tf, rows, source=source, gaps=gaps, status=status)
             return status
+        source_errors.append({"source": source, "type": "empty", "error": "zero rows returned"})
+        print(f"[backfill] {symbol}_{tf} source={source} returned zero rows", flush=True)
+    print(f"[backfill] {symbol}_{tf} failed all sources: {source_errors}", flush=True)
     write_series(out_dir, symbol, tf, [], source=sources[0], gaps=[], status="failed")
     return "failed"
 
