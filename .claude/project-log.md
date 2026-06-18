@@ -70,6 +70,11 @@ At the END of every session, append a dated entry: what changed, current state, 
   - Inline dashboard JavaScript syntax check -> `inline js syntax ok`.
 - Next watch item after Railway redeploy: confirm the sidebar scan health shows fresh `last scan`,
   `benchmark latest 5m` in ET, `failed backfills: none`, and nonzero `raw candidates` when setups exist.
+- Follow-up Railway logs showed only browser/WebSocket and `/scan-status` request traffic, with no
+  `[scan] backfill_start` or `[scheduler] scan emitted` lines. Added scheduler boot diagnostics so
+  the next deploy prints either `[scheduler] disabled SCAN_ENABLED=...` or
+  `[scheduler] enabled out_dir=... signals_path=... status_path=...`. Verification after this small
+  patch: `python -m pytest -q` -> **154 passed / 1 skipped / 1 expected yfinance warning**.
 
 ---
 

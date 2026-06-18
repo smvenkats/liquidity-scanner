@@ -36,10 +36,13 @@ def interval_seconds(now_utc: datetime | None = None) -> float:
 def start_scheduler(stop: threading.Event):
     """Start the periodic-scan daemon thread if SCAN_ENABLED. Returns the thread or None."""
     if not scan_enabled():
+        print(f"[scheduler] disabled SCAN_ENABLED={os.environ.get('SCAN_ENABLED', '<unset>')}", flush=True)
         return None
     out_dir = os.environ.get("BARS_DIR", "/data/bars")
     signals_path = os.environ.get("SIGNALS_PATH", "/data/signals.jsonl")
     status_path = os.environ.get("SCAN_STATUS_PATH", "/data/scan_status.json")
+    print(f"[scheduler] enabled out_dir={out_dir} signals_path={signals_path} "
+          f"status_path={status_path}", flush=True)
 
     def loop():
         from execution.config import load_params

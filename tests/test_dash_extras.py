@@ -1,7 +1,8 @@
 import base64
 from datetime import datetime, timezone
+import threading
 from fastapi.testclient import TestClient
-from dashboard.scheduler import is_market_hours, interval_seconds
+from dashboard.scheduler import is_market_hours, interval_seconds, start_scheduler
 
 
 def _utc(y, m, d, h, mi):
@@ -23,6 +24,12 @@ def test_interval_seconds_tighter_in_rth(monkeypatch):
     monkeypatch.setenv("SCAN_IDLE_MIN", "60")
     assert interval_seconds(_utc(2026, 6, 4, 14, 0)) == 15 * 60   # RTH
     assert interval_seconds(_utc(2026, 6, 6, 14, 0)) == 60 * 60   # weekend -> idle
+
+
+def test_start_scheduler_logs_when_disabled(monkeypatch, capsys):
+    monkeypatch.delenv("SCAN_ENABLED", raising=False)
+    assert start_scheduler(threading.Event()) is None
+    assert "[scheduler] disabled SCAN_ENABLED=<unset>" in capsys.readouterr().out
 
 
 def test_test_signal_endpoint_appends_and_requires_auth(monkeypatch, tmp_path):
