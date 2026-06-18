@@ -32,6 +32,34 @@ def test_save_cache_creates_parent_directory(tmp_path):
     assert client._current_refresh_token() == "ROTATED"
 
 
+def test_bad_cached_refresh_token_falls_back_to_new_env_token(tmp_path, monkeypatch):
+    cache = tmp_path / "tok.json"
+    cache.write_text(json.dumps({"refresh_token": "BAD_CACHED", "access_token": "A",
+                                 "api_server": "https://old", "expires_at": 0.0}))
+    calls = []
+
+    def fake_request(url, headers=None, form=None):
+        calls.append(form["refresh_token"])
+        if form["refresh_token"] == "BAD_CACHED":
+            raise qc.QuestradeAPIError("HTTP 400 for token", status=400)
+        return {
+            "access_token": "NEW_ACCESS",
+            "api_server": "https://new",
+            "expires_in": 1800,
+            "refresh_token": "ROTATED_FROM_ENV",
+        }
+
+    monkeypatch.setattr(qc, "_http_request_json", fake_request)
+    client = qc.QuestradeClient(refresh_token="FRESH_ENV", token_cache_path=cache)
+
+    client._refresh_access_token()
+
+    data = json.loads(cache.read_text())
+    assert calls == ["BAD_CACHED", "FRESH_ENV"]
+    assert data["refresh_token"] == "ROTATED_FROM_ENV"
+    assert client._current_refresh_token() == "ROTATED_FROM_ENV"
+
+
 def test_get_candles_parses_list(monkeypatch):
     client = qc.QuestradeClient(refresh_token="x", token_cache_path="/nonexistent.json")
     monkeypatch.setattr(client, "_authorized_get",

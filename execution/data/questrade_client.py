@@ -282,14 +282,35 @@ class QuestradeClient:
                 "(generate one in the Questrade API centre -> personal apps).")
         return token
 
+    def _exchange_refresh_token(self, refresh_token: str) -> dict:
+        return _http_request_json(TOKEN_URL, form={
+            "grant_type": "refresh_token", "refresh_token": refresh_token})
+
     def _refresh_access_token(self) -> None:
         """Exchange the refresh token for an access token; persist the rotation."""
         rt = self._current_refresh_token()
         try:
-            data = _http_request_json(TOKEN_URL, form={
-                "grant_type": "refresh_token", "refresh_token": rt})
+            data = self._exchange_refresh_token(rt)
         except QuestradeAPIError as e:
             if e.status == 400:
+                env_rt = self._env_refresh_token
+                if (getattr(self, "_cached_refresh_token", None)
+                        and env_rt and env_rt != rt):
+                    try:
+                        data = self._exchange_refresh_token(env_rt)
+                    except QuestradeAPIError as env_e:
+                        raise QuestradeAuthError(
+                            f"Token exchange failed ({env_e}). The refresh token is invalid, already "
+                            "used, or expired — Questrade tokens are single-use. Regenerate one in "
+                            "the API centre and update QUESTRADE_REFRESH_TOKEN.") from env_e
+                    else:
+                        print("[questrade] cached refresh token was rejected; recovered with "
+                              "QUESTRADE_REFRESH_TOKEN and updated token cache", flush=True)
+                        self._access_token = data["access_token"]
+                        self._api_server = data["api_server"].rstrip("/")
+                        self._expires_at = time.time() + float(data.get("expires_in", 1800))
+                        self._save_cache(data["refresh_token"])
+                        return
                 raise QuestradeAuthError(
                     f"Token exchange failed ({e}). The refresh token is invalid, already "
                     "used, or expired — Questrade tokens are single-use. Regenerate one in "

@@ -75,6 +75,14 @@ At the END of every session, append a dated entry: what changed, current state, 
   the next deploy prints either `[scheduler] disabled SCAN_ENABLED=...` or
   `[scheduler] enabled out_dir=... signals_path=... status_path=...`. Verification after this small
   patch: `python -m pytest -q` -> **154 passed / 1 skipped / 1 expected yfinance warning**.
+- Subsequent Railway logs showed the scheduler running, but all 5m Questrade fetches failed with
+  `QuestradeAuthError: Token exchange failed (HTTP 400...)`, causing `benchmark=SPY bench5_rows=0`
+  and `abort=no_benchmark_5m`. Root cause is token-state recovery, not scanner timing: Questrade
+  refresh tokens are single-use and the client normally prefers the cached rotated token over the env
+  seed. If the `/data` cached token is stale/bad, updating `QUESTRADE_REFRESH_TOKEN` alone may not
+  help. Added a narrow fallback: when cached-token exchange returns HTTP 400 and a different
+  env token exists, try the env token once, persist the new rotation, and log the recovery. Verification:
+  `python -m pytest -q` -> **155 passed / 1 skipped / 1 expected yfinance warning**.
 
 ---
 
