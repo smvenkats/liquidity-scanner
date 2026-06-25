@@ -1,6 +1,6 @@
 # tests/test_dash_server.py
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 import dashboard.server as server
 
@@ -21,11 +21,12 @@ def test_index_and_bars_and_backlog(tmp_path, monkeypatch):
     bars_dir = tmp_path / "data"; bars_dir.mkdir()
     _seed_bars(bars_dir)
     sig = tmp_path / "signals.jsonl"
-    sig.write_text('{"symbol":"X","rr":3,"qualified":true}\n')
+    sig.write_text('{"symbol":"X","rr":3,"qualified":true,"reentry_time":"2026-06-04T09:30:00-04:00"}\n')
 
     monkeypatch.setattr(server, "STATIC", static)
     monkeypatch.setattr(server, "BARS_DIR", str(bars_dir))
     monkeypatch.setattr(server, "SIGNALS_PATH", sig)
+    monkeypatch.setattr(server, "BACKLOG_NOW", datetime(2026, 6, 4, 18, 0, tzinfo=timezone.utc))
     app = server.make_app()
     client = TestClient(app)
 
@@ -37,6 +38,30 @@ def test_index_and_bars_and_backlog(tmp_path, monkeypatch):
     with client.websocket_connect("/ws") as ws:                # backlog on connect
         msg = ws.receive_json()
         assert msg["type"] == "backlog" and msg["signals"][0]["symbol"] == "X"
+
+
+def test_ws_backlog_defaults_to_today_active_signals(tmp_path, monkeypatch):
+    static = _seed_static(tmp_path)
+    bars_dir = tmp_path / "data"; bars_dir.mkdir()
+    sig = tmp_path / "signals.jsonl"
+    sig.write_text(
+        json.dumps({"symbol": "OLD", "signal_id": "OLD-1", "reentry_time": "2026-06-24T09:30:00-04:00"}) + "\n" +
+        json.dumps({"symbol": "DONE", "signal_id": "DONE-1", "reentry_time": "2026-06-25T09:30:00-04:00", "status": "resolved"}) + "\n" +
+        json.dumps({"symbol": "LIVE", "signal_id": "LIVE-1", "reentry_time": "2026-06-25T09:35:00-04:00"}) + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(server, "STATIC", static)
+    monkeypatch.setattr(server, "BARS_DIR", str(bars_dir))
+    monkeypatch.setattr(server, "SIGNALS_PATH", sig)
+    monkeypatch.setattr(server, "BACKLOG_NOW", datetime(2026, 6, 25, 18, 0, tzinfo=timezone.utc), raising=False)
+    app = server.make_app()
+    client = TestClient(app)
+
+    with client.websocket_connect("/ws") as ws:
+        msg = ws.receive_json()
+        assert msg["type"] == "backlog"
+        assert [s["symbol"] for s in msg["signals"]] == ["LIVE"]
 
 def test_scan_status_endpoint(tmp_path, monkeypatch):
     static = _seed_static(tmp_path)

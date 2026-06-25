@@ -1,6 +1,6 @@
 # tests/test_dash_feed.py
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from execution.models import Bar
 from dashboard.feed import load_signals, JsonlTailer, bars_window
 
@@ -24,6 +24,18 @@ def test_jsonl_tailer_yields_only_new_complete_lines(tmp_path):
         f.write('\n')                                 # complete line 4
     assert [r["n"] for r in t.new_records()] == [4]
 
+
+def test_jsonl_tailer_enriches_signal_rows(tmp_path):
+    p = tmp_path / "s.jsonl"
+    p.write_text('{"symbol":"A","reentry_time":"2026-06-25T09:30:00-04:00"}\n')
+    t = JsonlTailer(p)
+
+    got = t.new_records()
+
+    assert got[0]["source"] == "equities_sweep_python"
+    assert got[0]["market_date"] == "2026-06-25"
+    assert got[0]["status"] == "active"
+
 def _b(ts, c):
     return Bar(ts=ts, o=c, h=c, l=c, c=c, v=1)
 
@@ -43,3 +55,20 @@ def test_load_and_tailer_skip_malformed_lines(tmp_path):
     assert [r["n"] for r in load_signals(p)] == [1, 2]
     t = JsonlTailer(p)
     assert [r["n"] for r in t.new_records()] == [1, 2]
+
+
+def test_load_signals_active_only_keeps_today_active_rows(tmp_path):
+    p = tmp_path / "s.jsonl"
+    p.write_text(
+        json.dumps({"symbol": "OLD", "reentry_time": "2026-06-24T09:30:00-04:00"}) + "\n" +
+        json.dumps({"symbol": "DONE", "reentry_time": "2026-06-25T09:30:00-04:00", "status": "resolved"}) + "\n" +
+        json.dumps({"symbol": "LIVE", "reentry_time": "2026-06-25T09:35:00-04:00"}) + "\n" +
+        "NOT JSON\n",
+        encoding="utf-8",
+    )
+
+    got = load_signals(p, active_only=True, now=datetime(2026, 6, 25, 18, 0, tzinfo=timezone.utc))
+
+    assert [g["symbol"] for g in got] == ["LIVE"]
+    assert got[0]["market_date"] == "2026-06-25"
+    assert got[0]["status"] == "active"

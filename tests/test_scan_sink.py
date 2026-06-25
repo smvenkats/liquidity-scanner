@@ -27,3 +27,10 @@ def test_emit_appends_jsonl(tmp_path):
     assert len(lines) == 2
     rec = json.loads(lines[0])
     assert rec["symbol"] == "ABC" and rec["qualified"] is True and rec["target_price"] == 110.0
+    assert rec["source"] == "equities_sweep_python"
+    assert rec["asset_type"] == "equity"
+    assert rec["market_date"] == "2026-06-04"
+    assert rec["triggered_at"] == "2026-06-04T14:20:00-04:00"
+    assert rec["status"] == "active"
+    assert rec["outcome"] is None
+    assert rec["evaluated_at"] is None

@@ -16,11 +16,12 @@
   table{width:100%;border-collapse:collapse}
   th,td{padding:6px 8px;text-align:right;white-space:nowrap}
   th{position:sticky;top:0;background:#1b2129;color:var(--muted);border-bottom:1px solid var(--line)}
-  td:first-child,th:first-child,td:nth-child(2),th:nth-child(2){text-align:left}
+  td:first-child,th:first-child,td:nth-child(2),th:nth-child(2),td:nth-child(3),th:nth-child(3){text-align:left}
   tbody tr{border-bottom:1px solid var(--line);cursor:pointer}
   tbody tr:hover{background:#1b2129}
   tr.sel{background:#1f2630}
   .long{color:var(--long)} .short{color:var(--short)}
+  .state{color:var(--muted);text-transform:uppercase;font-size:11px}
   .badge{font-size:10px;padding:1px 5px;border-radius:8px;background:var(--accent);color:#0e1116;margin-left:6px}
   .health{padding:8px 12px;color:var(--muted);border-top:1px solid var(--line)}
   .health div{display:flex;justify-content:space-between;gap:10px;padding:2px 0}
@@ -52,7 +53,7 @@
 <div class="panel" id="center">
   <h2>Qualified signals (<span id="count">0</span>)</h2>
   <table>
-    <thead><tr><th>time</th><th>ticker</th><th>dir</th><th>lvl</th><th>entry</th><th>stop</th><th>target</th><th>R:R</th><th>RS%</th><th>spr</th><th>rvol</th><th>kz</th></tr></thead>
+    <thead><tr><th>time</th><th>status</th><th>ticker</th><th>dir</th><th>lvl</th><th>entry</th><th>stop</th><th>target</th><th>R:R</th><th>RS%</th><th>spr</th><th>rvol</th><th>kz</th></tr></thead>
     <tbody id="rows"></tbody>
   </table>
   <div id="empty" class="empty">waiting for signals&#8230;</div>
@@ -67,7 +68,7 @@
 const S=[]; let selected=null;
 const $=id=>document.getElementById(id);
 const fnum=(x,d=2)=>(x==null||x===''?'':Number(x).toFixed(d));
-const tstr=iso=>{try{return new Date(iso).toLocaleTimeString('en-US',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit'})+' ET';}catch(e){return iso;}};
+const tstr=iso=>{try{return new Date(iso).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'})+' ET';}catch(e){return iso;}};
 const ageStr=iso=>{try{const m=(Date.now()-new Date(iso).getTime())/60000; if(m<90)return `${Math.max(0,Math.round(m))}m ago`; return `${Math.round(m/60)}h ago`;}catch(e){return '';}};
 function passes(s){
   const rr=+$('f_rr').value||0, rs=+$('f_rs').value||0, dir=$('f_dir').value, lvl=$('f_lvl').value, kz=$('f_kz').value, age=+$('f_age').value||0;
@@ -88,8 +89,8 @@ function render(){
     const tr=document.createElement('tr');
     tr.className=(s._new?'new ':'')+(selected===s.signal_id?'sel':'');
     const dc=s.direction==='long'?'long':'short', arr=s.direction==='long'?'&#9650;':'&#9660;';
-    tr.innerHTML=`<td>${tstr(s.reentry_time)}${s._new?'<span class="badge">new</span>':''}</td>`+
-      `<td>${s.symbol}</td><td class="${dc}">${arr}</td><td>${s.level_type}</td>`+
+    tr.innerHTML=`<td>${tstr(s.triggered_at||s.reentry_time)}${s._new?'<span class="badge">new</span>':''}</td>`+
+      `<td class="state">${s.status||'active'}</td><td>${s.symbol}</td><td class="${dc}">${arr}</td><td>${s.level_type}</td>`+
       `<td>${fnum(s.entry_price)}</td><td>${fnum(s.stop_price)}</td><td>${fnum(s.target_price)}</td>`+
       `<td>${fnum(s.rr,1)}</td><td class="${(s.rs_score>=0)?'long':'short'}">${fnum((s.rs_score||0)*100,2)}</td>`+
       `<td>${fnum(s.spread_bps,1)}</td><td>${fnum((s.volume_context||{}).rvol,1)}</td><td>${s.killzone||''}</td>`;
@@ -98,7 +99,7 @@ function render(){
   }
 }
 async function preview(s){
-  $('pvhead').innerHTML=`<b>${s.symbol}</b> ${s.direction} ${s.level_type} &#183; R:R ${fnum(s.rr,1)} &#183; ${tstr(s.reentry_time)}`;
+  $('pvhead').innerHTML=`<b>${s.symbol}</b> ${s.direction} ${s.level_type} &#183; ${(s.status||'active').toUpperCase()} &#183; R:R ${fnum(s.rr,1)} &#183; ${tstr(s.triggered_at||s.reentry_time)}`;
   let bars=[];
   try{const r=await fetch(`/bars?symbol=${encodeURIComponent(s.symbol)}&ts=${encodeURIComponent(s.reentry_time)}`); bars=(await r.json()).bars||[];}catch(e){}
   drawSpark(s,bars);

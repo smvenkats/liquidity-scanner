@@ -20,6 +20,7 @@ SCAN_STATUS_PATH = Path(os.environ.get("SCAN_STATUS_PATH", ".tmp/scan_status.jso
 BARS_DIR = os.environ.get("BARS_DIR", ".tmp/bt_data")
 STATIC = Path(__file__).parent / "static"
 POLL_SECONDS = float(os.environ.get("DASH_POLL_SECONDS", "1.0"))
+BACKLOG_NOW = None
 
 
 def make_app() -> FastAPI:
@@ -90,7 +91,10 @@ def make_app() -> FastAPI:
             return
         await websocket.accept()
         clients.add(websocket)
-        await websocket.send_json({"type": "backlog", "signals": load_signals(SIGNALS_PATH)})
+        await websocket.send_json({
+            "type": "backlog",
+            "signals": load_signals(SIGNALS_PATH, active_only=True, now=BACKLOG_NOW),
+        })
         try:
             while True:
                 await websocket.receive_text()

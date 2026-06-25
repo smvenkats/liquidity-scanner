@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from execution.models import Bar
+from execution.scanner.ledger import enrich_signal_record, is_active_today
 
 
-def load_signals(path) -> list[dict]:
+def load_signals(path, *, active_only: bool = False, now=None) -> list[dict]:
     path = Path(path)
     if not path.exists():
         return []
@@ -15,9 +16,12 @@ def load_signals(path) -> list[dict]:
         if not line:
             continue
         try:
-            out.append(json.loads(line))
+            rec = enrich_signal_record(json.loads(line))
         except json.JSONDecodeError:
             continue
+        if active_only and not is_active_today(rec, now=now):
+            continue
+        out.append(rec)
     return out
 
 
@@ -43,7 +47,7 @@ class JsonlTailer:
             if not s:
                 continue
             try:
-                out.append(json.loads(s))
+                out.append(enrich_signal_record(json.loads(s)))
             except json.JSONDecodeError:
                 continue
         return out

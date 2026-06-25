@@ -7,15 +7,16 @@ At the END of every session, append a dated entry: what changed, current state, 
 
 ---
 
-## Current State (2026-06-18)
+## Current State (2026-06-25)
 
-- **`main`**, tests were last known **153 passed / 1 skipped** (the skip = token-gated live smoke; skips when the
+- **`main`**, tests were last known **164 passed / 1 skipped** (the skip = token-gated live smoke; skips when the
   local Questrade token is rotated/expired — see token conflict below).
 - **Live:** private family dashboard on **Railway** (`liquidity-scanner-production.up.railway.app`),
   behind Basic Auth, with an in-process **market-hours-aware** scan. Verified after the Questrade
-  cache fix that Railway can emit real signals (`scan_once_raw=8`, `fresh=4`). Latest local patch
-  makes dashboard times render in ET, filters scanner detections to RTH bars, and exposes scan
-  health (`last scan`, `raw candidates`, `emitted`, `benchmark latest 5m`, `failed backfills`).
+  cache fix that Railway can emit real signals (`scan_once_raw=8`, `fresh=4`). Dashboard backlog now
+  defaults to today's active ET-market-date signals, timestamps render with date + ET time, and signal
+  rows carry first-slice ledger metadata (`source`, `asset_type`, `market_date`, `created_at`,
+  `triggered_at`, `status`, `outcome`, `evaluated_at`).
 - **Pipeline:** data layer (Questrade + yfinance) → tiered sweep detection → daily feed (CLI
   `daily.py`) + hosted dashboard → order tickets (`build_ticket`). **Decision-support only — no
   live order execution is built.**
@@ -34,11 +35,42 @@ At the END of every session, append a dated entry: what changed, current state, 
 
 ### Architecture map
 - `execution/data/` — bulk data provider (Questrade client, paginate, normalize, yfinance, backfill, env)
-- `execution/scanner/` — detection engine, tiers (A/B), daily feed, run_scan, sink, emit_test_signal
+- `execution/scanner/` — detection engine, ledger metadata, tiers (A/B), daily feed, run_scan, sink, emit_test_signal
 - `execution/execute/` — `ticket.py` (Signal → OrderTicket)
 - `execution/backtest/` — BarStore + backtest harness
 - `dashboard/` — FastAPI server (auth, /ws, /bars, /test-signal), scheduler, static SPA
 - `directives/` — SOPs (backfill, daily_signals, deploy_railway, run_*)
+
+---
+
+## Session — 2026-06-25 (hybrid signal ledger first slice)
+
+- Wrote and committed the approved hybrid design spec:
+  `docs/superpowers/specs/2026-06-25-hybrid-signal-ledger-evm-engine-design.md`.
+- Added implementation plan:
+  `docs/superpowers/plans/2026-06-25-hybrid-signal-ledger.md`.
+- Implemented the current-scanner cleanup slice:
+  - Added `execution/scanner/ledger.py` with ET `market_date` derivation, compatibility metadata
+    enrichment, and active-today filtering.
+  - Updated `emit_signals()` so new JSONL rows include ledger metadata while preserving the existing
+    flat signal fields.
+  - Updated dashboard feed loading and WebSocket backlog so browser connects receive today's active
+    signals by default; historical rows remain in JSONL but no longer mix into the live table.
+  - Updated the dashboard table/preview to show date-aware ET timestamps and a compact `status`
+    column.
+  - Enriched tailed JSONL records too, so old-format `/test-signal` or manual appends still stream
+    with compatibility defaults.
+- Verification:
+  - Focused TDD checks were run red/green for ledger, sink, feed/server backlog, tailer enrichment,
+    and static dashboard contract.
+  - `python -m pytest -q` -> **164 passed / 1 skipped / 1 expected yfinance warning**.
+  - Inline dashboard JavaScript syntax check with `node --check` -> exit 0.
+- Next:
+  - Deploy/redeploy to Railway when ready and confirm old prior-day rows no longer appear in the live
+    table while current active test/real signals still stream.
+  - Separate follow-up slice can add automatic target/stop/timeout grading.
+  - Separate future spec can detail the Rust/Go EVM engine producer once this ledger boundary is
+    proven in production.
 
 ---
 
